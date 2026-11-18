@@ -20,15 +20,77 @@
     }
   }
 
+  const RANGE_CHUNK_SIZE = 256 * 1024;
+  const MAX_RANGE_ATTEMPTS = 6;
+
+  function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  async function fetchRange(url, start, end, totalSize, partUrl) {
+    let lastError = null;
+
+    for (let attempt = 1; attempt <= MAX_RANGE_ATTEMPTS; attempt++) {
+      try {
+        const response = await nativeFetch(url, {
+          cache: 'no-store',
+          headers: {
+            Range: `bytes=${start}-${end}`
+          }
+        });
+
+        if (response.status !== 206) {
+          throw new Error(`Expected HTTP 206, received ${response.status}`);
+        }
+
+        const contentRange = response.headers.get('Content-Range') || '';
+        const match = /^bytes (\d+)-(\d+)\/(\d+)$/i.exec(contentRange);
+        if (
+          !match ||
+          Number(match[1]) !== start ||
+          Number(match[2]) !== end ||
+          Number(match[3]) !== totalSize
+        ) {
+          throw new Error(`Unexpected Content-Range: ${contentRange || '(missing)'}`);
+        }
+
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        const expectedLength = end - start + 1;
+        if (bytes.byteLength !== expectedLength) {
+          throw new Error(
+            `Range length mismatch: expected ${expectedLength}, received ${bytes.byteLength}`
+          );
+        }
+
+        return bytes;
+      } catch (error) {
+        lastError = error;
+        if (attempt < MAX_RANGE_ATTEMPTS) {
+          const waitMs = Math.min(750 * (2 ** (attempt - 1)), 8000);
+          console.warn(
+            `[NEXUS] Range retry ${attempt}/${MAX_RANGE_ATTEMPTS - 1} for ${partUrl} bytes ${start}-${end}; retrying in ${waitMs} ms.`,
+            error
+          );
+          await delay(waitMs);
+        }
+      }
+    }
+
+    throw new Error(
+      `Failed to download ${partUrl} bytes ${start}-${end} after ${MAX_RANGE_ATTEMPTS} attempts: ${lastError?.message || 'unknown error'}`
+    );
+  }
+
   async function fetchPart(part) {
-    const response = await nativeFetch(new URL(part.url, document.baseURI), { cache: 'force-cache' });
-    if (!response.ok) {
-      throw new Error(`Could not download game data (${response.status}): ${part.url}`);
+    const url = new URL(part.url, document.baseURI);
+    const zipped = new Uint8Array(part.downloadSize);
+
+    for (let start = 0; start < part.downloadSize; start += RANGE_CHUNK_SIZE) {
+      const end = Math.min(start + RANGE_CHUNK_SIZE - 1, part.downloadSize - 1);
+      const chunk = await fetchRange(url, start, end, part.downloadSize, part.url);
+      zipped.set(chunk, start);
     }
-    const zipped = new Uint8Array(await response.arrayBuffer());
-    if (zipped.byteLength !== part.downloadSize) {
-      throw new Error(`Incomplete download: ${part.url}`);
-    }
+
     await verify(zipped, part.downloadSha256, part.url);
     if (typeof DecompressionStream !== 'function') {
       throw new Error('This browser does not support gzip streaming. Please use a recent version of Chrome, Edge, Firefox, or Safari.');
