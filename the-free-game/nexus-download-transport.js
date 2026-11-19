@@ -1,156 +1,326 @@
-/* Reconstruct Godot Web binaries from small, hash-verified gzip parts. */
-(() => {
+/*
+ * NEXUS resilient Godot Web transport.
+ * Downloads the small gzip parts through byte-range requests, validates each
+ * range, and persists verified ranges in IndexedDB so a page reload can resume.
+ */
+window.ValeDownloads = (() => {
   'use strict';
-  const manifest = {"index.wasm":{"size":39514754,"sha256":"fc74679e3b97f76878947fcd4fbe1268cbfa6188182a2e33bbc3f5dc9bfa57d0","contentType":"application/wasm","parts":[{"url":"part-index-wasm-0000-8d61efdefa7d.gz","size":4194304,"downloadSize":1298919,"downloadSha256":"8d61efdefa7d47126a820207caaee31265a776cc3bba631c3ef5562a5fcbd293"},{"url":"part-index-wasm-0001-1da66b3f3c4c.gz","size":4194304,"downloadSize":1177038,"downloadSha256":"1da66b3f3c4c2c66ec26c57941b784642eed882bad8ef3a59ad3e8241bbb3e6d"},{"url":"part-index-wasm-0002-324177717829.gz","size":4194304,"downloadSize":1084540,"downloadSha256":"324177717829ed770bfaa2cfa07242065b2d5d970ad4f127542e2d611eae6913"},{"url":"part-index-wasm-0003-53a3cb8d6bd1.gz","size":4194304,"downloadSize":852532,"downloadSha256":"53a3cb8d6bd119c8d07f1b7735536c68404af5a5d52735015eb1515fe6ee4433"},{"url":"part-index-wasm-0004-7fc0eb26d03d.gz","size":4194304,"downloadSize":786388,"downloadSha256":"7fc0eb26d03d82a0147cbb5bd761f2ee78ab88415a9db886bfdc4a0fc0e614c7"},{"url":"part-index-wasm-0005-1dc4bd0437a8.gz","size":4194304,"downloadSize":952698,"downloadSha256":"1dc4bd0437a87e304a3bce149e1e587ff591a776335a4e5e44713bce30897c0c"},{"url":"part-index-wasm-0006-95a3195a18ed.gz","size":4194304,"downloadSize":772617,"downloadSha256":"95a3195a18edda8ab8748064949413f400968e9071d1c565bd3a9f7b7563b683"},{"url":"part-index-wasm-0007-a1a4e6964f44.gz","size":4194304,"downloadSize":1043872,"downloadSha256":"a1a4e6964f44aa819dc8a4308a212d0e95f122551e40afb09d533a78dd34d2df"},{"url":"part-index-wasm-0008-daf43e07c16d.gz","size":4194304,"downloadSize":1385798,"downloadSha256":"daf43e07c16d9eff996d5fc145738d7a0aac3b561b8006c50c3ad5d18b4d03a3"},{"url":"part-index-wasm-0009-0520ae50ff4f.gz","size":1766018,"downloadSize":728500,"downloadSha256":"0520ae50ff4fdc14ed0f177182deac88bc6443842ba95e09296ad6850ae20ac5"}]},"index.pck":{"size":180701952,"sha256":"addace1c94102ee8c73d4648353d32be1ceff04dfd839e499613d09cb7a8c109","contentType":"application/octet-stream","parts":[{"url":"part-index-pck-0000-7e6edc454734.gz","size":4194304,"downloadSize":3825602,"downloadSha256":"7e6edc4547346eaaa28a87ccd9b5da88c9701b506cca221abdf3977dda3f2554"},{"url":"part-index-pck-0001-13f6990ac476.gz","size":4194304,"downloadSize":3455389,"downloadSha256":"13f6990ac476ffc8c0f476584df7f03b6bb4330f401d58a9b6427bde3cc7ab2a"},{"url":"part-index-pck-0002-c1bb1546c715.gz","size":4194304,"downloadSize":2893178,"downloadSha256":"c1bb1546c71545ae51b237fe3dc079365455353d9b2145ad56d82505e64a4775"},{"url":"part-index-pck-0003-627b1a08a71b.gz","size":4194304,"downloadSize":1823912,"downloadSha256":"627b1a08a71b75865ccf867bf59354edeed5714725e3424aeb0c88de08bef71d"},{"url":"part-index-pck-0004-f946a4db5a49.gz","size":4194304,"downloadSize":3315851,"downloadSha256":"f946a4db5a49a0a0f2bbe9caf5eb9bffc5456aa8f5f2c964b58381703783b8d0"},{"url":"part-index-pck-0005-f6ad3098ed7e.gz","size":4194304,"downloadSize":1799968,"downloadSha256":"f6ad3098ed7e371d803625a5bb49a8e97090a1db8593704862ea904da62cb05c"},{"url":"part-index-pck-0006-b7ae6b2a4045.gz","size":4194304,"downloadSize":3120053,"downloadSha256":"b7ae6b2a4045e8cc129d05e287f2b1cd14c3b471e852fbd58e570ee26701c348"},{"url":"part-index-pck-0007-e04644a7d2f1.gz","size":4194304,"downloadSize":2431955,"downloadSha256":"e04644a7d2f1de8bbdfe84156f02c1457fb3c4698edfef220a56c63bcfc2d0b1"},{"url":"part-index-pck-0008-133fe60d28ef.gz","size":4194304,"downloadSize":2376663,"downloadSha256":"133fe60d28ef81cd81d4b63840c61c4af24c5ee334422b1ed8ffce02ccd35225"},{"url":"part-index-pck-0009-23f684d8197b.gz","size":4194304,"downloadSize":2159642,"downloadSha256":"23f684d8197b9de48a1fef5addd0bd7773c7e442b508d94402e232be741abb82"},{"url":"part-index-pck-0010-7b05b8c7cd40.gz","size":4194304,"downloadSize":2462937,"downloadSha256":"7b05b8c7cd406e85bf7cee1eb17c1b6c79200b13e061abdc0166d537a2d17467"},{"url":"part-index-pck-0011-928f51bb6972.gz","size":4194304,"downloadSize":3409336,"downloadSha256":"928f51bb6972a18a8e0fc3baf43f2a57b9211166e55e40a0bd4973d4d8ff4027"},{"url":"part-index-pck-0012-810bfa94b4d1.gz","size":4194304,"downloadSize":3186025,"downloadSha256":"810bfa94b4d13ccff32a7130e9a1a3497aaeb9987364ef59c450040c8bd1c426"},{"url":"part-index-pck-0013-b06717a5d585.gz","size":4194304,"downloadSize":2323960,"downloadSha256":"b06717a5d585651b99c14bae2a379328081f7988baa945c8a021c0d1e8ea29ee"},{"url":"part-index-pck-0014-40e281bc2295.gz","size":4194304,"downloadSize":2272104,"downloadSha256":"40e281bc22955f325283b7bdfa37fe633ab86d0480314dee153c09c282da76ac"},{"url":"part-index-pck-0015-94957564bbcf.gz","size":4194304,"downloadSize":2153405,"downloadSha256":"94957564bbcf24e34d1f7eb1ea6638e203f524bd9b1cb3a8189683d049614d93"},{"url":"part-index-pck-0016-87a32b2372ce.gz","size":4194304,"downloadSize":2100056,"downloadSha256":"87a32b2372cec7ffd8ef9c93388756de1583935f3ebbe4e0249c232284b101f5"},{"url":"part-index-pck-0017-142d6facc649.gz","size":4194304,"downloadSize":2324349,"downloadSha256":"142d6facc6491d4225fc8c52ebf91b55dd073402e650131e59c722aff58c2bfe"},{"url":"part-index-pck-0018-2b77379ecd56.gz","size":4194304,"downloadSize":2250638,"downloadSha256":"2b77379ecd565f724abb756c525b92030bb7c458d601cef61b467bf82d606d57"},{"url":"part-index-pck-0019-583e63532e84.gz","size":4194304,"downloadSize":2235698,"downloadSha256":"583e63532e844d3ad880b43f264079e0354eee138f8dd8c77d3507270af543fa"},{"url":"part-index-pck-0020-a94f98f5e9f4.gz","size":4194304,"downloadSize":2265483,"downloadSha256":"a94f98f5e9f4c6015eed778bb55d23a31ac117ae63b48fe3a85bac30d77f41ad"},{"url":"part-index-pck-0021-0a547ca7b8c4.gz","size":4194304,"downloadSize":2555978,"downloadSha256":"0a547ca7b8c40b924dd675dcc343e7765cd309545a69a1da0ed7889ee3f06872"},{"url":"part-index-pck-0022-d7f89f612039.gz","size":4194304,"downloadSize":2591191,"downloadSha256":"d7f89f6120397dc465150b58b6f3f814b6adaa1d690bad50c6d38fbbded476c8"},{"url":"part-index-pck-0023-64f85c477385.gz","size":4194304,"downloadSize":2582609,"downloadSha256":"64f85c477385b3035535b5952eabe57e26706e1d47f934b0452e6d41ecba7841"},{"url":"part-index-pck-0024-a2af47a0f06b.gz","size":4194304,"downloadSize":2621884,"downloadSha256":"a2af47a0f06b95f7e989a7890b0b86bfa8c6dbcf3eb87e4e8a014087c597237b"},{"url":"part-index-pck-0025-66fdd0d34fb4.gz","size":4194304,"downloadSize":2706802,"downloadSha256":"66fdd0d34fb44bee1142e7fbf4b9bfd11717fa335efbe874c196fc494b15ddca"},{"url":"part-index-pck-0026-d4a27ad05f81.gz","size":4194304,"downloadSize":2614960,"downloadSha256":"d4a27ad05f8107c5c686ae06200fee4ec4b0c438062233b0816b1491ebe41af2"},{"url":"part-index-pck-0027-ec0cf0bae5c5.gz","size":4194304,"downloadSize":2476999,"downloadSha256":"ec0cf0bae5c5c78fb6fd0ff7a06ed3e8e2d5e037e7a6e2d51cc8474c6f60282f"},{"url":"part-index-pck-0028-d5395f0cff83.gz","size":4194304,"downloadSize":2527764,"downloadSha256":"d5395f0cff83d01f6d77c943489675ee87a420f7f5219d073fe9069e1f232209"},{"url":"part-index-pck-0029-86dbe252485d.gz","size":4194304,"downloadSize":2544481,"downloadSha256":"86dbe252485dae5657b0428be2a9aad1a8f9b187e72376da837e9d4854451ab8"},{"url":"part-index-pck-0030-2ceef814f529.gz","size":4194304,"downloadSize":2363874,"downloadSha256":"2ceef814f52982b19e7689b5dc4c920f81d37befde455dcbe37df0fc8209da22"},{"url":"part-index-pck-0031-b61bfb24e062.gz","size":4194304,"downloadSize":2561626,"downloadSha256":"b61bfb24e0629de803b70a64687deed6ffda77950f19cad2634eb88705468205"},{"url":"part-index-pck-0032-9ab9f2e566a3.gz","size":4194304,"downloadSize":2383842,"downloadSha256":"9ab9f2e566a3cbe4336d53cbe3f8028a2bf71ca5c87eadf7baf860a0e893b083"},{"url":"part-index-pck-0033-c4a35fb0fdce.gz","size":4194304,"downloadSize":2180968,"downloadSha256":"c4a35fb0fdce7f9e9c62879b2197c1f1b40a51f58060b5d16f884cbc9196b1fc"},{"url":"part-index-pck-0034-95c84a0d3679.gz","size":4194304,"downloadSize":2376325,"downloadSha256":"95c84a0d3679bf05db35ee6ddd1ddeac07e9618b95a0492a8ef713a34d72ea49"},{"url":"part-index-pck-0035-a94c8a379db2.gz","size":4194304,"downloadSize":2294447,"downloadSha256":"a94c8a379db25742bbebfd368b8e3a81189507f9f05ba1c109982efea2a414f9"},{"url":"part-index-pck-0036-35be1d12a9b0.gz","size":4194304,"downloadSize":2333891,"downloadSha256":"35be1d12a9b07ace6e1618a3d9ff8f72b63aefe5a2d09454e6e06be776077e88"},{"url":"part-index-pck-0037-52193cd5f788.gz","size":4194304,"downloadSize":2382464,"downloadSha256":"52193cd5f7886ed2c28bb84015c856a07d793d2b8c8836348747fc264498ed48"},{"url":"part-index-pck-0038-b32b84540813.gz","size":4194304,"downloadSize":2158998,"downloadSha256":"b32b8454081368ca85e3644e6f3304d50d898805ccf3de2d8fa3ff1f13ee7eb8"},{"url":"part-index-pck-0039-8607a2516d51.gz","size":4194304,"downloadSize":2224629,"downloadSha256":"8607a2516d51e30c64a2108473bd5ada3d4fa336772d985c7b51c032f992ec9f"},{"url":"part-index-pck-0040-fb2ee1e2d60f.gz","size":4194304,"downloadSize":2411239,"downloadSha256":"fb2ee1e2d60fe55374bf5ee7cadf6f23fb0a6784d9f701042850840b62667edd"},{"url":"part-index-pck-0041-a2c003b22513.gz","size":4194304,"downloadSize":2090896,"downloadSha256":"a2c003b22513555ac601e2ff18600b2deca0694241480f1af95def4b3aba0e46"},{"url":"part-index-pck-0042-8ef9e6f5454c.gz","size":4194304,"downloadSize":2213893,"downloadSha256":"8ef9e6f5454c770da43dae07b1f20b103cf5ddecfccbe5d6df3f1b6254c3a56e"},{"url":"part-index-pck-0043-61b9f6e8781c.gz","size":346880,"downloadSize":152170,"downloadSha256":"61b9f6e8781c6e678d87349a8fbd30be694ce9686661951ddde86376c90a0b53"}]}};
+
+  const manifest = {"index.wasm":{"size":39514754,"sha256":"fc74679e3b97f76878947fcd4fbe1268cbfa6188182a2e33bbc3f5dc9bfa57d0","contentType":"application/wasm","parts":[{"url":"part-8d61efdefa7d47126a82.gz","size":4194304,"downloadSize":1298919,"downloadSha256":"8d61efdefa7d47126a820207caaee31265a776cc3bba631c3ef5562a5fcbd293"},{"url":"part-1da66b3f3c4c2c66ec26.gz","size":4194304,"downloadSize":1177038,"downloadSha256":"1da66b3f3c4c2c66ec26c57941b784642eed882bad8ef3a59ad3e8241bbb3e6d"},{"url":"part-324177717829ed770bfa.gz","size":4194304,"downloadSize":1084540,"downloadSha256":"324177717829ed770bfaa2cfa07242065b2d5d970ad4f127542e2d611eae6913"},{"url":"part-53a3cb8d6bd119c8d07f.gz","size":4194304,"downloadSize":852532,"downloadSha256":"53a3cb8d6bd119c8d07f1b7735536c68404af5a5d52735015eb1515fe6ee4433"},{"url":"part-7fc0eb26d03d82a0147c.gz","size":4194304,"downloadSize":786388,"downloadSha256":"7fc0eb26d03d82a0147cbb5bd761f2ee78ab88415a9db886bfdc4a0fc0e614c7"},{"url":"part-1dc4bd0437a87e304a3b.gz","size":4194304,"downloadSize":952698,"downloadSha256":"1dc4bd0437a87e304a3bce149e1e587ff591a776335a4e5e44713bce30897c0c"},{"url":"part-95a3195a18edda8ab874.gz","size":4194304,"downloadSize":772617,"downloadSha256":"95a3195a18edda8ab8748064949413f400968e9071d1c565bd3a9f7b7563b683"},{"url":"part-a1a4e6964f44aa819dc8.gz","size":4194304,"downloadSize":1043872,"downloadSha256":"a1a4e6964f44aa819dc8a4308a212d0e95f122551e40afb09d533a78dd34d2df"},{"url":"part-daf43e07c16d9eff996d.gz","size":4194304,"downloadSize":1385798,"downloadSha256":"daf43e07c16d9eff996d5fc145738d7a0aac3b561b8006c50c3ad5d18b4d03a3"},{"url":"part-0520ae50ff4fdc14ed0f.gz","size":1766018,"downloadSize":728500,"downloadSha256":"0520ae50ff4fdc14ed0f177182deac88bc6443842ba95e09296ad6850ae20ac5"}]},"the-free-game-abcad609239c00f1.pck":{"size":153780012,"sha256":"abcad609239c00f1b85bc223546c0238bc389cf0bda623e0dccfaa0856df5de1","contentType":"application/octet-stream","parts":[{"url":"part-62ae1f1d9486dea97dc6.gz","size":4194304,"downloadSize":3825602,"downloadSha256":"62ae1f1d9486dea97dc61654dffdeb535857770d5e4c89ec70400a111779be2b"},{"url":"part-3ed339e875badded4be6.gz","size":4194304,"downloadSize":3937675,"downloadSha256":"3ed339e875badded4be655470df5fdf57d62e09def3b8a909a686f5a43c772d8"},{"url":"part-e7986b0e2dd19a040288.gz","size":4194304,"downloadSize":3565746,"downloadSha256":"e7986b0e2dd19a040288a3ae851112e756169de1e19c170d65d82dced533f589"},{"url":"part-82d0dd8b17f596fda9f0.gz","size":4194304,"downloadSize":3670594,"downloadSha256":"82d0dd8b17f596fda9f055217f57369a24fce58cd06bf0f461d14c09c96384a0"},{"url":"part-809dfb3df06e41457d5f.gz","size":4194304,"downloadSize":2433220,"downloadSha256":"809dfb3df06e41457d5f2201073bfadd8d4ae9665ca8b7df6110c9509a7ef990"},{"url":"part-362afa25df20bae88f59.gz","size":4194304,"downloadSize":2327896,"downloadSha256":"362afa25df20bae88f59bd333dbf0279a9b06f32cee99fa6b96c97af689bb4f7"},{"url":"part-884212a096281c176322.gz","size":4194304,"downloadSize":2174626,"downloadSha256":"884212a096281c176322a98429327bf8fd2d2c841f711b449f8509ac807e5d60"},{"url":"part-bf29dd7f5cc44dda7ed8.gz","size":4194304,"downloadSize":2142293,"downloadSha256":"bf29dd7f5cc44dda7ed818cacf56be50c24860e7c0380c85098409e6fade7904"},{"url":"part-36a0f5bd11d296b95b27.gz","size":4194304,"downloadSize":3016920,"downloadSha256":"36a0f5bd11d296b95b27106b9d2b1c421ee0720f711adb4b1901ae9f0d201191"},{"url":"part-9dc4e396c62ed1a653c4.gz","size":4194304,"downloadSize":3118253,"downloadSha256":"9dc4e396c62ed1a653c41a8bffbc2b8efa111c134b25620550661f63b2975111"},{"url":"part-910e0b277cb7d01322e6.gz","size":4194304,"downloadSize":2397930,"downloadSha256":"910e0b277cb7d01322e6e64fdc6cdd54d6028a30a06ca9fb9d17df0308659b89"},{"url":"part-80c2c95ef53e50480b05.gz","size":4194304,"downloadSize":2221454,"downloadSha256":"80c2c95ef53e50480b053a7e513843765e9037ecedc3212cfd5dbd8d80e44724"},{"url":"part-e0d46cdbc67aad5f1b1c.gz","size":4194304,"downloadSize":2336027,"downloadSha256":"e0d46cdbc67aad5f1b1c6c703b64aab7c87987c397b064cde3ea16d36af7e7ee"},{"url":"part-dcd8196896e73d14881c.gz","size":4194304,"downloadSize":2274694,"downloadSha256":"dcd8196896e73d14881cfb4898ddd1fe5e3844a1410862e1dd6a7f6d18462870"},{"url":"part-9c42a1988801ec8e1d36.gz","size":4194304,"downloadSize":2728523,"downloadSha256":"9c42a1988801ec8e1d36f2d0ad331af91a7945f175da37f97b35553e635795e4"},{"url":"part-b0913d0b34e501613017.gz","size":4194304,"downloadSize":2553144,"downloadSha256":"b0913d0b34e501613017df15f8c60801ca7fa9d7ce8ec1e8d9a0a1943656e519"},{"url":"part-26fa9611ef56fd3985b9.gz","size":4194304,"downloadSize":2555908,"downloadSha256":"26fa9611ef56fd3985b9f5bd575edb50d962917a338931c58f04b7dca65b7481"},{"url":"part-98ca65c5dcc98c7989a2.gz","size":4194304,"downloadSize":2607662,"downloadSha256":"98ca65c5dcc98c7989a27ba0eb378bbd7bbd6304290d61f473cd662cd119bbf9"},{"url":"part-cdf034da0b70ff1d47a9.gz","size":4194304,"downloadSize":2636303,"downloadSha256":"cdf034da0b70ff1d47a939dce18a3784cd4ce0bd1efe18c5188cd6f5654ca5b3"},{"url":"part-277408a39bd236032343.gz","size":4194304,"downloadSize":2672728,"downloadSha256":"277408a39bd236032343c77fbf18fa7a030e6fc2e5f3f8af61307b8327a414fa"},{"url":"part-6f4b89d065bca8d77ad8.gz","size":4194304,"downloadSize":2618927,"downloadSha256":"6f4b89d065bca8d77ad80b5ae480c46ad6467d01f2f10f932820103499349be7"},{"url":"part-b6f8a7963a29b1b1e345.gz","size":4194304,"downloadSize":2501527,"downloadSha256":"b6f8a7963a29b1b1e34501e0692d7e31b9ff2c7d65192a5825ddd2ddc7ed39c0"},{"url":"part-7c9d9fd93cc96d11ddd0.gz","size":4194304,"downloadSize":2514555,"downloadSha256":"7c9d9fd93cc96d11ddd055e088740ee8a44773a51a82d12d2ac3655fed879591"},{"url":"part-9ffe4e2fe46341c9c7c5.gz","size":4194304,"downloadSize":2473189,"downloadSha256":"9ffe4e2fe46341c9c7c5d74390ccae65fa5f77d92ec4d08356f5fa22f55fa16c"},{"url":"part-2c59e2a80191ded7bb0c.gz","size":4194304,"downloadSize":2461982,"downloadSha256":"2c59e2a80191ded7bb0cc51056f3df4cb1df0df27eb7dac1b89d7089be7098ba"},{"url":"part-8b1daf337db0f649c5dd.gz","size":4194304,"downloadSize":2465886,"downloadSha256":"8b1daf337db0f649c5dd6f961939a893be40169ada7047b5562657e9b0104943"},{"url":"part-5507d0e542eab8afa1ae.gz","size":4194304,"downloadSize":2259207,"downloadSha256":"5507d0e542eab8afa1ae6220c6bf820bbdbf6aafe97915350dcdac1dea8eb5b7"},{"url":"part-6b9985cf30bd54907a63.gz","size":4194304,"downloadSize":2226902,"downloadSha256":"6b9985cf30bd54907a6304d8797f7823bdae0a38d3cc54dbed460d282fe50504"},{"url":"part-ab2642750095a7d1d462.gz","size":4194304,"downloadSize":2422858,"downloadSha256":"ab2642750095a7d1d462f19a4d08531dd301ba79ba106327c5790d2f92bdf537"},{"url":"part-a019db04862f97f6d35e.gz","size":4194304,"downloadSize":2282231,"downloadSha256":"a019db04862f97f6d35e3aa3d6852f5fb80085cf87dadddfbd1a1a55f2a48fa3"},{"url":"part-fe531e8d6bb8ca5e3f6f.gz","size":4194304,"downloadSize":2361635,"downloadSha256":"fe531e8d6bb8ca5e3f6f21d7485c35636438afeb569cb97f836d040390da6ac4"},{"url":"part-4ad3dfab1089d6be9f23.gz","size":4194304,"downloadSize":2261046,"downloadSha256":"4ad3dfab1089d6be9f23f1721395a5e8715e16e770a83938858667571ee90e75"},{"url":"part-7ea617c34c3c4ffc721b.gz","size":4194304,"downloadSize":2221789,"downloadSha256":"7ea617c34c3c4ffc721becf645e3aeb3c752d2fafd11a39e3773a69d3813414b"},{"url":"part-63e315687e74152a8a16.gz","size":4194304,"downloadSize":2147405,"downloadSha256":"63e315687e74152a8a1687b15070a5d3886a9858b530b7657a35e15f79842e22"},{"url":"part-1640a4d346b6a2c7c26c.gz","size":4194304,"downloadSize":2164417,"downloadSha256":"1640a4d346b6a2c7c26c05b0a8cd21bc2afb2457a0c81ca7dca42668b6877828"},{"url":"part-5cd85d206bfac2a0f05b.gz","size":4194304,"downloadSize":2330005,"downloadSha256":"5cd85d206bfac2a0f05b39af9d8613c02b44247bb745bb9971e4ed5d98877695"},{"url":"part-1b2137965f1b6bda4c75.gz","size":2785068,"downloadSize":1519903,"downloadSha256":"1b2137965f1b6bda4c75f4165b84e66299f2c3a5e80f4bce6669a9c503897d53"}]}};
+  const RANGE_BYTES = 256 * 1024;
+  const MAX_ATTEMPTS = 4;
+  const REQUEST_TIMEOUT_MS = 25000;
+  const DB_NAME = 'nexus-godot-downloads-v2';
+  const DB_STORE = 'verified-ranges';
   const nativeFetch = window.fetch.bind(window);
-  const files = new Map(Object.entries(manifest).map(([name, file]) => [
-    new URL(name, document.baseURI).href, file
-  ]));
-  const pending = new Map();
-  const hex = bytes => Array.from(new Uint8Array(bytes), n => n.toString(16).padStart(2, '0')).join('');
+  const memoryFallback = new Map();
+
+  const toHex = (buffer) => Array.from(new Uint8Array(buffer), (value) =>
+    value.toString(16).padStart(2, '0')
+  ).join('');
 
   async function sha256(bytes) {
-    return hex(await crypto.subtle.digest('SHA-256', bytes));
+    return toHex(await window.crypto.subtle.digest('SHA-256', bytes));
   }
 
-  async function verify(bytes, expected, label) {
-    const actual = await sha256(bytes);
-    if (actual !== expected) {
-      throw new Error(`Integrity check failed for ${label}. Please reload the game.`);
-    }
+  function createMemoryStore() {
+    return {
+      async get(key) { return memoryFallback.get(key) || null; },
+      async set(key, value) { memoryFallback.set(key, value); },
+      async delete(key) { memoryFallback.delete(key); },
+      async keys() { return Array.from(memoryFallback.keys()); },
+    };
   }
 
-  const RANGE_CHUNK_SIZE = 256 * 1024;
-  const MAX_RANGE_ATTEMPTS = 6;
+  function createIndexedDbStore() {
+    if (!window.indexedDB) return Promise.resolve(createMemoryStore());
 
-  function delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  async function fetchRange(url, start, end, totalSize, partUrl) {
-    let lastError = null;
-
-    for (let attempt = 1; attempt <= MAX_RANGE_ATTEMPTS; attempt++) {
+    return new Promise((resolve) => {
+      let request;
       try {
-        const response = await nativeFetch(url, {
-          cache: 'no-store',
-          headers: {
-            Range: `bytes=${start}-${end}`
+        request = window.indexedDB.open(DB_NAME, 1);
+      } catch (_) {
+        resolve(createMemoryStore());
+        return;
+      }
+
+      request.onupgradeneeded = () => {
+        const db = request.result;
+        if (!db.objectStoreNames.contains(DB_STORE)) {
+          db.createObjectStore(DB_STORE);
+        }
+      };
+      request.onsuccess = () => {
+        const db = request.result;
+        const run = (mode, action) => new Promise((resolveAction, rejectAction) => {
+          let transaction;
+          let operationResult = null;
+          let operationSucceeded = false;
+          let settled = false;
+          const rejectOnce = (error) => {
+            if (settled) return;
+            settled = true;
+            rejectAction(error || new Error('IndexedDB transaction failed'));
+          };
+          try {
+            transaction = db.transaction(DB_STORE, mode);
+            const store = transaction.objectStore(DB_STORE);
+            const operation = action(store);
+            operation.onsuccess = () => {
+              operationResult = operation.result ?? null;
+              operationSucceeded = true;
+            };
+            operation.onerror = () => rejectOnce(operation.error || new Error('IndexedDB operation failed'));
+            transaction.oncomplete = () => {
+              if (settled) return;
+              settled = true;
+              if (operationSucceeded) resolveAction(operationResult);
+              else rejectAction(new Error('IndexedDB transaction completed without a result'));
+            };
+            transaction.onerror = () => rejectOnce(transaction.error || new Error('IndexedDB transaction failed'));
+            transaction.onabort = () => rejectOnce(transaction.error || new Error('IndexedDB transaction aborted'));
+          } catch (error) {
+            rejectOnce(error);
           }
         });
-
-        if (response.status !== 206) {
-          throw new Error(`Expected HTTP 206, received ${response.status}`);
-        }
-
-        const contentRange = response.headers.get('Content-Range') || '';
-        const match = /^bytes (\d+)-(\d+)\/(\d+)$/i.exec(contentRange);
-        if (
-          !match ||
-          Number(match[1]) !== start ||
-          Number(match[2]) !== end ||
-          Number(match[3]) !== totalSize
-        ) {
-          throw new Error(`Unexpected Content-Range: ${contentRange || '(missing)'}`);
-        }
-
-        const bytes = new Uint8Array(await response.arrayBuffer());
-        const expectedLength = end - start + 1;
-        if (bytes.byteLength !== expectedLength) {
-          throw new Error(
-            `Range length mismatch: expected ${expectedLength}, received ${bytes.byteLength}`
-          );
-        }
-
-        return bytes;
-      } catch (error) {
-        lastError = error;
-        if (attempt < MAX_RANGE_ATTEMPTS) {
-          const waitMs = Math.min(750 * (2 ** (attempt - 1)), 8000);
-          console.warn(
-            `[NEXUS] Range retry ${attempt}/${MAX_RANGE_ATTEMPTS - 1} for ${partUrl} bytes ${start}-${end}; retrying in ${waitMs} ms.`,
-            error
-          );
-          await delay(waitMs);
-        }
-      }
-    }
-
-    throw new Error(
-      `Failed to download ${partUrl} bytes ${start}-${end} after ${MAX_RANGE_ATTEMPTS} attempts: ${lastError?.message || 'unknown error'}`
-    );
-  }
-
-  async function fetchPart(part) {
-    const url = new URL(part.url, document.baseURI);
-    const zipped = new Uint8Array(part.downloadSize);
-
-    for (let start = 0; start < part.downloadSize; start += RANGE_CHUNK_SIZE) {
-      const end = Math.min(start + RANGE_CHUNK_SIZE - 1, part.downloadSize - 1);
-      const chunk = await fetchRange(url, start, end, part.downloadSize, part.url);
-      zipped.set(chunk, start);
-    }
-
-    await verify(zipped, part.downloadSha256, part.url);
-    if (typeof DecompressionStream !== 'function') {
-      throw new Error('This browser does not support gzip streaming. Please use a recent version of Chrome, Edge, Firefox, or Safari.');
-    }
-    const stream = new Blob([zipped]).stream().pipeThrough(new DecompressionStream('gzip'));
-    const raw = new Uint8Array(await new Response(stream).arrayBuffer());
-    if (raw.byteLength !== part.size) {
-      throw new Error(`Invalid decompressed size: ${part.url}`);
-    }
-    return raw;
-  }
-
-  async function downloadFile(file, name) {
-    const output = new Uint8Array(file.size);
-    let offset = 0;
-    for (const part of file.parts) {
-      const raw = await fetchPart(part);
-      output.set(raw, offset);
-      offset += raw.byteLength;
-    }
-    if (offset !== file.size) {
-      throw new Error(`Invalid total size for ${name}.`);
-    }
-    await verify(output, file.sha256, name);
-    return output;
-  }
-
-  async function wrappedFetch(input, options) {
-    const requestUrl = input instanceof Request ? input.url : input;
-    const href = new URL(requestUrl, document.baseURI).href;
-    const file = files.get(href);
-    const method = (options && options.method) || (input instanceof Request ? input.method : 'GET');
-    if (!file || method.toUpperCase() !== 'GET') {
-      return nativeFetch(input, options);
-    }
-    if (!pending.has(href)) {
-      pending.set(href, downloadFile(file, new URL(href).pathname.split('/').pop()));
-    }
-    const bytes = await pending.get(href);
-    return new Response(bytes, {
-      status: 200,
-      headers: {
-        'Content-Type': file.contentType,
-        'Content-Length': String(file.size),
-        'Cache-Control': 'no-store'
-      }
+        resolve({
+          get: (key) => run('readonly', (store) => store.get(key)),
+          set: (key, value) => run('readwrite', (store) => store.put(value, key)),
+          delete: (key) => run('readwrite', (store) => store.delete(key)),
+          keys: () => run('readonly', (store) => store.getAllKeys()),
+        });
+      };
+      request.onerror = () => resolve(createMemoryStore());
+      request.onblocked = () => resolve(createMemoryStore());
     });
   }
 
-  window.ValeDownloads = {
-    async start(engine, options) {
-      window.fetch = wrappedFetch;
-      try {
-        return await engine.startGame(options);
-      } finally {
-        if (window.fetch === wrappedFetch) {
-          window.fetch = nativeFetch;
+  async function pruneStaleRanges(store, files) {
+    if (typeof store.keys !== 'function') return;
+    const currentKeys = new Set();
+    for (const [, file] of files) {
+      for (const part of file.parts) {
+        for (let start = 0; start < part.downloadSize; start += RANGE_BYTES) {
+          const end = Math.min(part.downloadSize - 1, start + RANGE_BYTES - 1);
+          currentKeys.add(`${part.downloadSha256}|${part.url}|${start}|${end}`);
         }
-        pending.clear();
       }
     }
-  };
+    try {
+      const oldKeys = await store.keys();
+      for (const key of oldKeys || []) {
+        if (!currentKeys.has(String(key))) {
+          try { await store.delete(key); } catch (_) { /* cache cleanup is best-effort */ }
+          memoryFallback.delete(String(key));
+        }
+      }
+    } catch (_) {
+      // Cache cleanup must never block the playable core download.
+    }
+  }
+
+  async function getCachedRange(store, key, expectedLength) {
+    let entry = null;
+    try {
+      entry = await store.get(key);
+    } catch (_) {
+      // Continue with this-tab memory when IndexedDB is unavailable or blocked.
+      entry = memoryFallback.get(key) || null;
+    }
+    if (!entry) entry = memoryFallback.get(key) || null;
+    if (!entry || !entry.bytes || !entry.sha256) return null;
+
+    const bytes = new Uint8Array(entry.bytes);
+    if (bytes.byteLength !== expectedLength || await sha256(bytes) !== entry.sha256) {
+      try { await store.delete(key); } catch (_) { /* cache is best-effort */ }
+      memoryFallback.delete(key);
+      return null;
+    }
+    return bytes;
+  }
+
+  async function cacheRange(store, key, bytes) {
+    const owned = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+    const entry = { bytes: owned, sha256: await sha256(bytes) };
+    try {
+      await store.set(key, entry);
+    } catch (_) {
+      // Storage quota/private-mode failures must not prevent this session's game from running.
+      memoryFallback.set(key, entry);
+    }
+  }
+
+  function sleep(milliseconds) {
+    return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+  }
+
+  async function fetchRange(url, start, end, expectedTotal) {
+    const expectedLength = end - start + 1;
+    let lastError = null;
+
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+      const controller = new AbortController();
+      const timer = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+      try {
+        const response = await nativeFetch(url, {
+          method: 'GET',
+          headers: { Range: `bytes=${start}-${end}` },
+          cache: 'no-store',
+          credentials: 'same-origin',
+          signal: controller.signal,
+        });
+
+        if (response.status !== 206) {
+          throw new Error(`Range request returned HTTP ${response.status}; expected 206.`);
+        }
+
+        const contentRange = response.headers.get('content-range');
+        const match = contentRange && /^bytes\s+(\d+)-(\d+)\/(\d+|\*)$/i.exec(contentRange.trim());
+        if (!match || Number(match[1]) !== start || Number(match[2]) !== end ||
+            (match[3] !== '*' && Number(match[3]) !== expectedTotal)) {
+          throw new Error('The server returned an invalid Content-Range header.');
+        }
+
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        if (bytes.byteLength !== expectedLength) {
+          throw new Error(`Short range response: ${bytes.byteLength}/${expectedLength} bytes.`);
+        }
+        return bytes;
+      } catch (error) {
+        lastError = error;
+        if (attempt + 1 < MAX_ATTEMPTS) {
+          await sleep(350 * (2 ** attempt));
+        }
+      } finally {
+        window.clearTimeout(timer);
+      }
+    }
+
+    throw new Error(`Could not download bytes ${start}-${end} from ${url}: ${lastError?.message || 'network error'}`);
+  }
+
+  async function downloadPart(part, store, onRangeReady) {
+    const url = new URL(part.url, document.baseURI).href;
+    const output = new Uint8Array(part.downloadSize);
+    const ranges = [];
+
+    for (let start = 0; start < part.downloadSize; start += RANGE_BYTES) {
+      const end = Math.min(part.downloadSize - 1, start + RANGE_BYTES - 1);
+      const key = `${part.downloadSha256}|${part.url}|${start}|${end}`;
+      ranges.push({ start, end, key });
+    }
+
+    // A small bounded fan-out is faster than serial requests without flooding the host.
+    const concurrency = 4;
+    for (let index = 0; index < ranges.length; index += concurrency) {
+      const group = ranges.slice(index, index + concurrency);
+      const results = await Promise.allSettled(group.map(async (range) => {
+        const expectedLength = range.end - range.start + 1;
+        let bytes = await getCachedRange(store, range.key, expectedLength);
+        if (!bytes) {
+          bytes = await fetchRange(url, range.start, range.end, part.downloadSize);
+          await cacheRange(store, range.key, bytes);
+        }
+        output.set(bytes, range.start);
+        onRangeReady(bytes.byteLength, range.key);
+      }));
+      const failure = results.find((result) => result.status === 'rejected');
+      if (failure) throw failure.reason;
+    }
+
+    if (await sha256(output) !== part.downloadSha256) {
+      throw new Error(`Compressed part integrity check failed: ${part.url}`);
+    }
+    return output;
+  }
+
+  async function downloadFile(file, store, progress) {
+    const output = new Uint8Array(file.size);
+    let offset = 0;
+
+    for (const part of file.parts) {
+      const zipped = await downloadPart(part, store, (length, key) => {
+        progress.set(key, length);
+        reportProgress(progress);
+      });
+      const decodedBuffer = await new Response(
+        new Blob([zipped]).stream().pipeThrough(new DecompressionStream('gzip'))
+      ).arrayBuffer();
+      const decoded = new Uint8Array(decodedBuffer);
+      if (decoded.byteLength !== part.size) {
+        throw new Error(`Decoded part has an invalid size: ${part.url}`);
+      }
+      output.set(decoded, offset);
+      offset += decoded.byteLength;
+    }
+
+    if (offset !== file.size || await sha256(output) !== file.sha256) {
+      throw new Error('The reconstructed Godot file failed its SHA-256 integrity check.');
+    }
+    return output;
+  }
+
+  let activeProgressCallback = null;
+  let totalDownloadBytes = 0;
+
+  function reportProgress(progress) {
+    if (!activeProgressCallback) return;
+    const current = Array.from(progress.values()).reduce((sum, size) => sum + size, 0);
+    activeProgressCallback(current, totalDownloadBytes);
+  }
+
+  async function start(engine, options = {}) {
+    if (typeof DecompressionStream !== 'function') {
+      throw new Error('This browser does not support gzip decompression. Please update your browser.');
+    }
+    if (!window.crypto?.subtle) {
+      throw new Error('Secure SHA-256 checks are not available in this browser. Use HTTPS.');
+    }
+
+    const storage = options.rangeStore || await createIndexedDbStore();
+    const progress = new Map();
+    const files = Object.entries(manifest);
+    await pruneStaleRanges(storage, files);
+    totalDownloadBytes = files.reduce((sum, [, file]) =>
+      sum + file.parts.reduce((partSum, part) => partSum + part.downloadSize, 0), 0
+    );
+    activeProgressCallback = typeof options.onProgress === 'function' ? options.onProgress : null;
+
+    const fileUrls = new Map(files.map(([name, file]) => [
+      new URL(name, document.baseURI).href,
+      file,
+    ]));
+    const pending = new Map();
+    const originalFetch = window.fetch;
+
+    const wrappedFetch = async (input, requestOptions) => {
+      const inputUrl = input instanceof Request ? input.url : input;
+      const href = new URL(inputUrl, document.baseURI).href;
+      const file = fileUrls.get(href);
+      if (!file) return nativeFetch(input, requestOptions);
+
+      if (!pending.has(href)) {
+        pending.set(href, downloadFile(file, storage, progress));
+      }
+      const bytes = await pending.get(href);
+      return new Response(bytes, {
+        status: 200,
+        headers: {
+          'Content-Type': file.contentType || file.type || 'application/octet-stream',
+          'Content-Length': String(file.size),
+        },
+      });
+    };
+
+    window.fetch = wrappedFetch;
+    reportProgress(progress);
+    try {
+      await engine.startGame();
+    } finally {
+      if (window.fetch === wrappedFetch) window.fetch = originalFetch;
+      activeProgressCallback = null;
+    }
+  }
+
+  return { start };
 })();

@@ -1,0 +1,12 @@
+{
+  "name": "The Free Game",
+  "version": "0.4.4",
+  "main_pack": "the-free-game-abcad609239c00f1.pck",
+  "main_pack_sha256": "abcad609239c00f1b85bc223546c0238bc389cf0bda623e0dccfaa0856df5de1",
+  "main_pack_bytes": 153780012,
+  "shell_language": "fa",
+  "shell_fonts": {
+    "regular": "Vazirmatn-regular-b69fd4c680b8.ttf",
+    "semibold": "Vazirmatn-semibold-3f239d8364c1.ttf"
+  }
+}
