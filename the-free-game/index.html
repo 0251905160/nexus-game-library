@@ -1,221 +1,110 @@
-<!DOCTYPE html>
-<html lang="en">
-	<head>
-		<meta charset="utf-8">
-		<meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0">
-		<title>The Free Game</title>
-		<style>
-html, body, #canvas {
-	margin: 0;
-	padding: 0;
-	border: 0;
-}
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101b19">
+  <title>The Free Game | NEXUS AI</title>
+  <style>
+    @font-face {font-family:Vazirmatn;src:url("Vazirmatn-regular-b69fd4c680b8.ttf") format("truetype");font-weight:400;font-style:normal;font-display:swap}
+    @font-face {font-family:Vazirmatn;src:url("Vazirmatn-semibold-3f239d8364c1.ttf") format("truetype");font-weight:600 900;font-style:normal;font-display:swap}
+    * {box-sizing:border-box}
+    html,body {margin:0;width:100%;height:100%;overflow:hidden;background:#101b19;color:#f2ead8;font-family:Vazirmatn, sans-serif}
+    #canvas {display:block;width:100%;height:100%;outline:none;touch-action:none}
+    #status {position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 35%,#243b35,#101b19 72%);padding:24px}
+    .load-card {width:min(520px,94vw);padding:28px 30px;border:1px solid #816b45;border-radius:16px;background:rgba(12,23,21,.88);box-shadow:0 22px 70px #0008;text-align:center}
+    h1 {font-size:clamp(22px,4vw,30px);font-weight:600;margin:0 0 10px}
+    #message {font-size:14px;line-height:1.9;color:#d2c8b3;margin:0 0 18px}
+    progress {width:100%;height:12px;border:0;border-radius:10px;overflow:hidden;accent-color:#d5b46e}
+    progress::-webkit-progress-bar {background:#35423b;border-radius:10px}
+    progress::-webkit-progress-value {background:#d5b46e;border-radius:10px}
+    progress::-moz-progress-bar {background:#d5b46e;border-radius:10px}
+    #detail {font-size:12px;color:#bdb39f;margin-top:12px;min-height:1.8em}
+    #retry {display:none;margin:14px auto 0;border:1px solid #c2a267;border-radius:8px;background:#d5b46e;color:#17211d;padding:9px 18px;font:600 13px Vazirmatn;cursor:pointer}
+    #error {display:none;color:#f0b9a7;font-size:13px;line-height:1.8;margin-top:12px;overflow-wrap:anywhere}
+    @media(max-width:480px) {.load-card{padding:22px 18px}}
+  </style>
+  <link rel="icon" type="image/png" href="index.icon.png">
+  <link rel="apple-touch-icon" href="index.apple-touch-icon.png">
+</head>
+<body>
+  <canvas id="canvas" tabindex="0" aria-label="بازی The Free Game"></canvas>
+  <div id="status" role="status" aria-live="polite">
+    <section class="load-card">
+      <h1>درهٔ تاکستان‌ها</h1>
+      <p id="message">در حال آماده‌سازی موتور بازی و دریافت بستهٔ اصلی…</p>
+      <progress id="progress"></progress>
+      <div id="detail">در اولین اجرا، دریافت فایل‌ها ممکن است کمی طول بکشد.</div>
+      <button id="retry" type="button">تلاش دوباره</button>
+      <div id="error"></div>
+    </section>
+  </div>
+  <script src="index.js"></script>
+  <script src="nexus-download-transport.js"></script>
+  <script>
+    const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":false,"executable":"index","experimentalVK":false,"fileSizes":{"index.wasm":39514754,"the-free-game-abcad609239c00f1.pck":153780012},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4,"mainPack":"the-free-game-abcad609239c00f1.pck"};
+    const GODOT_THREADS_ENABLED = false;
+    const statusNode = document.getElementById('status');
+    const progressNode = document.getElementById('progress');
+    const messageNode = document.getElementById('message');
+    const detailNode = document.getElementById('detail');
+    const retryNode = document.getElementById('retry');
+    const errorNode = document.getElementById('error');
+    let booting = false;
+    function fail(error) {
+      booting = false;
+      messageNode.textContent = 'بارگذاری بازی ناموفق بود.';
+      detailNode.textContent = 'اتصال اینترنت را بررسی کن و دوباره تلاش کن.';
+      errorNode.textContent = error && error.message ? error.message : String(error || 'خطای ناشناخته');
+      errorNode.style.display = 'block';
+      retryNode.style.display = 'block';
+    }
+    async function startGame() {
+      if (booting) return;
+      booting = true;
+      retryNode.style.display = 'none';
+      errorNode.style.display = 'none';
+      try {
+        if (typeof Engine !== 'function') throw new Error('فایل موتور بازی بارگذاری نشد.');
+        if (!window.ValeDownloads || typeof window.ValeDownloads.start !== 'function') throw new Error('سامانهٔ دانلود بازی بارگذاری نشد.');
 
-body {
-	color: white;
-	background-color: black;
-	overflow: hidden;
-	touch-action: none;
-}
+        // Detect unsupported browsers before downloading the large core payload.
+        const missingFeatures = Engine.getMissingFeatures({
+          threads: GODOT_THREADS_ENABLED,
+        });
+        if (missingFeatures.length !== 0) {
+          booting = false;
+          messageNode.textContent = 'این مرورگر امکان اجرای بازی را ندارد.';
+          detailNode.textContent = missingFeatures.join('، ');
+          progressNode.style.display = 'none';
+          retryNode.style.display = 'none';
+          return;
+        }
 
-#canvas {
-	display: block;
-}
-
-#canvas:focus {
-	outline: none;
-}
-
-#status, #status-splash, #status-progress {
-	position: absolute;
-	left: 0;
-	right: 0;
-}
-
-#status, #status-splash {
-	top: 0;
-	bottom: 0;
-}
-
-#status {
-	background-color: #0d0a08;
-	display: flex;
-	flex-direction: column;
-	justify-content: center;
-	align-items: center;
-	visibility: hidden;
-}
-
-#status-splash {
-	max-height: 100%;
-	max-width: 100%;
-	margin: auto;
-}
-
-#status-splash.show-image--false {
-	display: none;
-}
-
-#status-splash.fullsize--true {
-	height: 100%;
-	width: 100%;
-	object-fit: contain;
-}
-
-#status-splash.use-filter--false {
-	image-rendering: pixelated;
-}
-
-#status-progress, #status-notice {
-	display: none;
-}
-
-#status-progress {
-	bottom: 10%;
-	width: 50%;
-	margin: 0 auto;
-}
-
-#status-notice {
-	background-color: #5b3943;
-	border-radius: 0.5rem;
-	border: 1px solid #9b3943;
-	color: #e0e0e0;
-	font-family: 'Noto Sans', 'Droid Sans', Arial, sans-serif;
-	line-height: 1.3;
-	margin: 0 2rem;
-	overflow: hidden;
-	padding: 1rem;
-	text-align: center;
-	z-index: 1;
-}
-		</style>
-		<link id="-gd-engine-icon" rel="icon" type="image/png" href="index.icon.png" />
-<link rel="apple-touch-icon" href="index.apple-touch-icon.png"/>
-
-	</head>
-	<body>
-		<canvas id="canvas">
-			Your browser does not support the canvas tag.
-		</canvas>
-
-		<noscript>
-			Your browser does not support JavaScript.
-		</noscript>
-
-		<div id="status">
-			<img id="status-splash" class="show-image--false fullsize--true use-filter--true" src="index.png" alt="">
-			<progress id="status-progress"></progress>
-			<div id="status-notice"></div>
-		</div>
-
-		<script src="index.js"></script>
-		<script src="nexus-download-transport.js"></script>
-		<script>
-const GODOT_CONFIG = {"args":[],"canvasResizePolicy":2,"emscriptenPoolSize":8,"ensureCrossOriginIsolationHeaders":false,"executable":"index","experimentalVK":false,"fileSizes":{"index.pck":180701952,"index.wasm":39514754},"focusCanvas":true,"gdextensionLibs":[],"godotPoolSize":4};
-const GODOT_THREADS_ENABLED = false;
-const engine = new Engine(GODOT_CONFIG);
-
-(function () {
-	const statusOverlay = document.getElementById('status');
-	const statusProgress = document.getElementById('status-progress');
-	const statusNotice = document.getElementById('status-notice');
-
-	let initializing = true;
-	let statusMode = '';
-
-	function setStatusMode(mode) {
-		if (statusMode === mode || !initializing) {
-			return;
-		}
-		if (mode === 'hidden') {
-			statusOverlay.remove();
-			initializing = false;
-			return;
-		}
-		statusOverlay.style.visibility = 'visible';
-		statusProgress.style.display = mode === 'progress' ? 'block' : 'none';
-		statusNotice.style.display = mode === 'notice' ? 'block' : 'none';
-		statusMode = mode;
-	}
-
-	function setStatusNotice(text) {
-		while (statusNotice.lastChild) {
-			statusNotice.removeChild(statusNotice.lastChild);
-		}
-		const lines = text.split('\n');
-		lines.forEach((line) => {
-			statusNotice.appendChild(document.createTextNode(line));
-			statusNotice.appendChild(document.createElement('br'));
-		});
-	}
-
-	function displayFailureNotice(err) {
-		console.error(err);
-		if (err instanceof Error) {
-			setStatusNotice(err.message);
-		} else if (typeof err === 'string') {
-			setStatusNotice(err);
-		} else {
-			setStatusNotice('An unknown error occurred.');
-		}
-		setStatusMode('notice');
-		initializing = false;
-	}
-
-	const missing = Engine.getMissingFeatures({
-		threads: GODOT_THREADS_ENABLED,
-	});
-
-	if (missing.length !== 0) {
-		if (GODOT_CONFIG['serviceWorker'] && GODOT_CONFIG['ensureCrossOriginIsolationHeaders'] && 'serviceWorker' in navigator) {
-			let serviceWorkerRegistrationPromise;
-			try {
-				serviceWorkerRegistrationPromise = navigator.serviceWorker.getRegistration();
-			} catch (err) {
-				serviceWorkerRegistrationPromise = Promise.reject(new Error('Service worker registration failed.'));
-			}
-			// There's a chance that installing the service worker would fix the issue
-			Promise.race([
-				serviceWorkerRegistrationPromise.then((registration) => {
-					if (registration != null) {
-						return Promise.reject(new Error('Service worker already exists.'));
-					}
-					return registration;
-				}).then(() => engine.installServiceWorker()),
-				// For some reason, `getRegistration()` can stall
-				new Promise((resolve) => {
-					setTimeout(() => resolve(), 2000);
-				}),
-			]).then(() => {
-				// Reload if there was no error.
-				window.location.reload();
-			}).catch((err) => {
-				console.error('Error while registering service worker:', err);
-			});
-		} else {
-			// Display the message as usual
-			const missingMsg = 'Error\nThe following features required to run Godot projects on the Web are missing:\n';
-			displayFailureNotice(missingMsg + missing.join('\n'));
-		}
-	} else {
-		setStatusMode('progress');
-		window.ValeDownloads.start(engine, {
-			'onProgress': function (current, total) {
-				if (current > 0 && total > 0) {
-					statusProgress.value = current;
-					statusProgress.max = total;
-				} else {
-					statusProgress.removeAttribute('value');
-					statusProgress.removeAttribute('max');
-				}
-			},
-		}).then(() => {
-			setStatusMode('hidden');
-		}, displayFailureNotice);
-	}
-}());
-		</script>
-	</body>
+        const engine = new Engine(GODOT_CONFIG);
+        await window.ValeDownloads.start(engine, {
+          onProgress(current, total) {
+            if (current > 0 && total > 0) {
+              progressNode.max = total;
+              progressNode.value = Math.min(current, total);
+              const percent = Math.floor(Math.min(current / total, 1) * 100);
+              messageNode.textContent = 'در حال دریافت فایل‌های اصلی بازی…';
+              detailNode.textContent = `${percent}٪  •  ${(current/1000000).toFixed(1)} از ${(total/1000000).toFixed(1)} مگابایت`;
+            } else {
+              progressNode.removeAttribute('value');
+              detailNode.textContent = 'در حال برقراری ارتباط…';
+            }
+          }
+        });
+        statusNode.remove();
+        document.getElementById('canvas').focus({preventScroll:true});
+      } catch (error) {
+        fail(error);
+      }
+    }
+    // Start a clean Engine instance after a failed boot; verified ranges remain in IndexedDB.
+    retryNode.addEventListener('click', () => window.location.reload());
+    startGame();
+  </script>
+</body>
 </html>
-
