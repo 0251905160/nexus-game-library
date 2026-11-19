@@ -32,6 +32,35 @@ window.ValeDownloads = (() => {
     };
   }
 
+  async function requestPersistentStorage() {
+    const manager = navigator.storage;
+    if (!manager) {
+      return { supported: false, persistent: false };
+    }
+
+    try {
+      const alreadyPersistent = typeof manager.persisted === 'function'
+        ? await manager.persisted()
+        : false;
+      if (alreadyPersistent) {
+        return { supported: true, persistent: true, alreadyPersistent: true };
+      }
+
+      if (typeof manager.persist !== 'function') {
+        return { supported: true, persistent: false, requestAvailable: false };
+      }
+
+      const persistent = await manager.persist();
+      return { supported: true, persistent: Boolean(persistent), requested: true };
+    } catch (error) {
+      return {
+        supported: true,
+        persistent: false,
+        error: error?.message || 'Persistent storage request failed.',
+      };
+    }
+  }
+
   function createIndexedDbStore() {
     if (!window.indexedDB) return Promise.resolve(createMemoryStore());
 
@@ -217,12 +246,13 @@ window.ValeDownloads = (() => {
       const results = await Promise.allSettled(group.map(async (range) => {
         const expectedLength = range.end - range.start + 1;
         let bytes = await getCachedRange(store, range.key, expectedLength);
+        const fromCache = Boolean(bytes);
         if (!bytes) {
           bytes = await fetchRange(url, range.start, range.end, part.downloadSize);
           await cacheRange(store, range.key, bytes);
         }
         output.set(bytes, range.start);
-        onRangeReady(bytes.byteLength, range.key);
+        onRangeReady(bytes.byteLength, range.key, fromCache);
       }));
       const failure = results.find((result) => result.status === 'rejected');
       if (failure) throw failure.reason;
@@ -234,14 +264,15 @@ window.ValeDownloads = (() => {
     return output;
   }
 
-  async function downloadFile(file, store, progress) {
+  async function downloadFile(file, store, progress, downloadedProgress) {
     const output = new Uint8Array(file.size);
     let offset = 0;
 
     for (const part of file.parts) {
-      const zipped = await downloadPart(part, store, (length, key) => {
+      const zipped = await downloadPart(part, store, (length, key, fromCache) => {
         progress.set(key, length);
-        reportProgress(progress);
+        if (!fromCache) downloadedProgress.set(key, length);
+        reportProgress(progress, downloadedProgress);
       });
       const decodedBuffer = await new Response(
         new Blob([zipped]).stream().pipeThrough(new DecompressionStream('gzip'))
@@ -263,10 +294,17 @@ window.ValeDownloads = (() => {
   let activeProgressCallback = null;
   let totalDownloadBytes = 0;
 
-  function reportProgress(progress) {
+  function reportProgress(progress, downloadedProgress) {
     if (!activeProgressCallback) return;
-    const current = Array.from(progress.values()).reduce((sum, size) => sum + size, 0);
-    activeProgressCallback(current, totalDownloadBytes);
+    const sumBytes = (entries) => Array.from(entries.values()).reduce((sum, size) => sum + size, 0);
+    const current = sumBytes(progress);
+    const downloadedBytes = sumBytes(downloadedProgress);
+    const cachedBytes = Math.max(0, current - downloadedBytes);
+    activeProgressCallback(current, totalDownloadBytes, {
+      downloadedBytes,
+      cachedBytes,
+      restoredBytes: current,
+    });
   }
 
   async function start(engine, options = {}) {
@@ -277,8 +315,15 @@ window.ValeDownloads = (() => {
       throw new Error('Secure SHA-256 checks are not available in this browser. Use HTTPS.');
     }
 
+    const storageStatusPromise = requestPersistentStorage();
     const storage = options.rangeStore || await createIndexedDbStore();
+    storageStatusPromise.then((storageStatus) => {
+      if (typeof options.onStorageStatus === 'function') {
+        try { options.onStorageStatus(storageStatus); } catch (_) { /* UI callbacks must not interrupt loading */ }
+      }
+    }).catch(() => { /* Persistent-storage permission must never block the game. */ });
     const progress = new Map();
+    const downloadedProgress = new Map();
     const files = Object.entries(manifest);
     await pruneStaleRanges(storage, files);
     totalDownloadBytes = files.reduce((sum, [, file]) =>
@@ -300,7 +345,7 @@ window.ValeDownloads = (() => {
       if (!file) return nativeFetch(input, requestOptions);
 
       if (!pending.has(href)) {
-        pending.set(href, downloadFile(file, storage, progress));
+        pending.set(href, downloadFile(file, storage, progress, downloadedProgress));
       }
       const bytes = await pending.get(href);
       return new Response(bytes, {
@@ -313,7 +358,7 @@ window.ValeDownloads = (() => {
     };
 
     window.fetch = wrappedFetch;
-    reportProgress(progress);
+    reportProgress(progress, downloadedProgress);
     try {
       await engine.startGame();
     } finally {
