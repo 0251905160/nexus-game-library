@@ -34,7 +34,7 @@
       <h1>درهٔ تاکستان‌ها</h1>
       <p id="message">در حال آماده‌سازی موتور بازی و دریافت بستهٔ اصلی…</p>
       <progress id="progress"></progress>
-      <div id="detail">در اولین اجرا، دریافت فایل‌ها ممکن است کمی طول بکشد.</div>
+      <div id="detail">فایل‌های بازی در حافظهٔ همین مرورگر ذخیره می‌شوند تا دفعات بعد سریع‌تر اجرا شوند.</div>
       <button id="retry" type="button">تلاش دوباره</button>
       <div id="error"></div>
     </section>
@@ -83,16 +83,35 @@
 
         const engine = new Engine(GODOT_CONFIG);
         await window.ValeDownloads.start(engine, {
-          onProgress(current, total) {
+          onStorageStatus(storage) {
+            if (storage.persistent) {
+              detailNode.textContent = 'ذخیره‌سازی پایدار مرورگر فعال است؛ فایل‌های بازی برای اجراهای بعدی نگه داشته می‌شوند.';
+            } else if (storage.supported) {
+              detailNode.textContent = 'فایل‌ها در حافظهٔ مرورگر ذخیره می‌شوند، اما مرورگر ممکن است آن‌ها را پاک کند.';
+            } else {
+              detailNode.textContent = 'ذخیره‌سازی پایدار در این مرورگر در دسترس نیست؛ از حالت ناشناس استفاده نکن.';
+            }
+          },
+          onProgress(current, total, source = {}) {
             if (current > 0 && total > 0) {
+              const downloaded = Number(source.downloadedBytes || 0);
+              const cached = Number(source.cachedBytes || 0);
               progressNode.max = total;
               progressNode.value = Math.min(current, total);
               const percent = Math.floor(Math.min(current / total, 1) * 100);
-              messageNode.textContent = 'در حال دریافت فایل‌های اصلی بازی…';
-              detailNode.textContent = `${percent}٪  •  ${(current/1000000).toFixed(1)} از ${(total/1000000).toFixed(1)} مگابایت`;
+              if (downloaded === 0 && cached > 0) {
+                messageNode.textContent = 'در حال بازیابی بازی از حافظهٔ دستگاه…';
+                detailNode.textContent = `${percent}٪  •  ${(cached/1000000).toFixed(1)} مگابایت از حافظهٔ ذخیره‌شده`;
+              } else if (cached > 0) {
+                messageNode.textContent = 'در حال آماده‌سازی بازی و دریافت بخش‌های باقی‌مانده…';
+                detailNode.textContent = `آماده‌سازی ${percent}٪  •  حافظه: ${(cached/1000000).toFixed(1)} مگابایت  •  اینترنت: ${(downloaded/1000000).toFixed(1)} مگابایت`;
+              } else {
+                messageNode.textContent = 'در حال دریافت فایل‌های اصلی بازی…';
+                detailNode.textContent = `${percent}٪  •  دریافت از اینترنت: ${(downloaded/1000000).toFixed(1)} مگابایت`;
+              }
             } else {
               progressNode.removeAttribute('value');
-              detailNode.textContent = 'در حال برقراری ارتباط…';
+              detailNode.textContent = 'در حال بررسی حافظهٔ ذخیره‌شده و برقراری ارتباط…';
             }
           }
         });
