@@ -315,12 +315,13 @@ window.ValeDownloads = (() => {
       throw new Error('Secure SHA-256 checks are not available in this browser. Use HTTPS.');
     }
 
-    const storageStatus = await requestPersistentStorage();
-    if (typeof options.onStorageStatus === 'function') {
-      try { options.onStorageStatus(storageStatus); } catch (_) { /* UI callbacks must not interrupt loading */ }
-    }
-
+    const storageStatusPromise = requestPersistentStorage();
     const storage = options.rangeStore || await createIndexedDbStore();
+    storageStatusPromise.then((storageStatus) => {
+      if (typeof options.onStorageStatus === 'function') {
+        try { options.onStorageStatus(storageStatus); } catch (_) { /* UI callbacks must not interrupt loading */ }
+      }
+    }).catch(() => { /* Persistent-storage permission must never block the game. */ });
     const progress = new Map();
     const downloadedProgress = new Map();
     const files = Object.entries(manifest);
