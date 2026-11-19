@@ -67,6 +67,20 @@
       try {
         if (typeof Engine !== 'function') throw new Error('فایل موتور بازی بارگذاری نشد.');
         if (!window.ValeDownloads || typeof window.ValeDownloads.start !== 'function') throw new Error('سامانهٔ دانلود بازی بارگذاری نشد.');
+
+        // Detect unsupported browsers before downloading the large core payload.
+        const missingFeatures = Engine.getMissingFeatures({
+          threads: GODOT_THREADS_ENABLED,
+        });
+        if (missingFeatures.length !== 0) {
+          booting = false;
+          messageNode.textContent = 'این مرورگر امکان اجرای بازی را ندارد.';
+          detailNode.textContent = missingFeatures.join('، ');
+          progressNode.style.display = 'none';
+          retryNode.style.display = 'none';
+          return;
+        }
+
         const engine = new Engine(GODOT_CONFIG);
         await window.ValeDownloads.start(engine, {
           onProgress(current, total) {
