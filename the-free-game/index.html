@@ -51,6 +51,7 @@
     const retryNode = document.getElementById('retry');
     const errorNode = document.getElementById('error');
     let booting = false;
+    let progressStarted = false;
     function fail(error) {
       booting = false;
       messageNode.textContent = 'بارگذاری بازی ناموفق بود.';
@@ -84,6 +85,7 @@
         const engine = new Engine(GODOT_CONFIG);
         await window.ValeDownloads.start(engine, {
           onStorageStatus(storage) {
+            if (progressStarted) return;
             if (storage.persistent) {
               detailNode.textContent = 'ذخیره‌سازی پایدار مرورگر فعال است؛ فایل‌های بازی برای اجراهای بعدی نگه داشته می‌شوند.';
             } else if (storage.supported) {
@@ -94,6 +96,7 @@
           },
           onProgress(current, total, source = {}) {
             if (current > 0 && total > 0) {
+              progressStarted = true;
               const downloaded = Number(source.downloadedBytes || 0);
               const cached = Number(source.cachedBytes || 0);
               progressNode.max = total;
